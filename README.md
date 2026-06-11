@@ -14,13 +14,13 @@ An in-game admin panel for managing jobs, ranks, salaries, and player employment
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| UI | React 18, React Router 7, Tailwind CSS 4 |
-| Components | Radix UI, Lucide icons, Recharts |
-| Build | Vite 6 |
-| Backend | Lua 5.4, ESX Legacy callbacks |
-| Database | MySQL via oxmysql |
+| Layer      | Technology                               |
+| ---------- | ---------------------------------------- |
+| UI         | React 18, React Router 7, Tailwind CSS 4 |
+| Components | Radix UI, Lucide icons, Recharts         |
+| Build      | Vite 6                                   |
+| Backend    | Lua 5.4, ESX Legacy callbacks            |
+| Database   | MySQL via oxmysql                        |
 
 ## Dependencies
 
