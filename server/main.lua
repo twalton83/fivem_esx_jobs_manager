@@ -203,7 +203,8 @@ ESX.RegisterServerCallback('jobspanel:getData', function(source, cb)
     cb({
         jobs = getFormattedJobs(),
         players = getFormattedPlayers(),
-        logs = getFormattedLogs()
+        logs = getFormattedLogs(),
+        bossPoints = getFormattedBossPoints()
     })
 end)
 
@@ -381,6 +382,75 @@ ESX.RegisterServerCallback('jobspanel:setPlayerJob', function(source, cb, data)
     cb({ success = true, players = getFormattedPlayers() })
 end)
 
+-- ── Boss Points ──────────────────────────────────────────────────────────
+local function getFormattedBossPoints()
+    local points = MySQL.query.await('SELECT * FROM jobspanel_boss_points ORDER BY job_name, id')
+    local result = {}
+    for _, p in ipairs(points or {}) do
+        result[#result + 1] = {
+            id = p.id,
+            jobName = p.job_name,
+            x = p.x,
+            y = p.y,
+            z = p.z,
+        }
+    end
+    return result
+end
+
+ESX.RegisterServerCallback('jobspanel:getBossPoints', function(source, cb)
+    cb(getFormattedBossPoints())
+end)
+
+ESX.RegisterServerCallback('jobspanel:createBossPoint', function(source, cb, data)
+    if not isAdmin(source) then cb({ success = false, error = 'Unauthorized' }) return end
+    if not checkRate(source) then cb({ success = false, error = 'Too many requests' }) return end
+    if type(data) ~= 'table' then cb({ success = false, error = 'Invalid payload' }) return end
+    if not validJobName(data.jobName) then cb({ success = false, error = 'Invalid job name' }) return end
+    if type(data.x) ~= 'number' or type(data.y) ~= 'number' or type(data.z) ~= 'number' then
+        cb({ success = false, error = 'Invalid coordinates' })
+        return
+    end
+
+    local jobExists = MySQL.scalar.await('SELECT COUNT(*) FROM jobs WHERE name = ?', { data.jobName })
+    if jobExists == 0 then
+        cb({ success = false, error = 'Job not found' })
+        return
+    end
+
+    MySQL.insert.await(
+        'INSERT INTO jobspanel_boss_points (job_name, x, y, z) VALUES (?, ?, ?, ?)',
+        { data.jobName, data.x, data.y, data.z }
+    )
+
+    local points = getFormattedBossPoints()
+    addLog(source, 'CREATE_BOSS_POINT', ('Created boss menu point for %s at %.1f, %.1f, %.1f'):format(data.jobName, data.x, data.y, data.z))
+    TriggerClientEvent('jobspanel:syncBossPoints', -1, points)
+    cb({ success = true, bossPoints = points })
+end)
+
+ESX.RegisterServerCallback('jobspanel:deleteBossPoint', function(source, cb, data)
+    if not isAdmin(source) then cb({ success = false, error = 'Unauthorized' }) return end
+    if not checkRate(source) then cb({ success = false, error = 'Too many requests' }) return end
+    if type(data) ~= 'table' or not validInt(data.id, 1, 2147483647) then
+        cb({ success = false, error = 'Invalid point ID' })
+        return
+    end
+
+    local point = MySQL.single.await('SELECT * FROM jobspanel_boss_points WHERE id = ?', { data.id })
+    if not point then
+        cb({ success = false, error = 'Boss point not found' })
+        return
+    end
+
+    MySQL.query.await('DELETE FROM jobspanel_boss_points WHERE id = ?', { data.id })
+
+    local points = getFormattedBossPoints()
+    addLog(source, 'DELETE_BOSS_POINT', ('Deleted boss menu point #%d for %s'):format(data.id, point.job_name))
+    TriggerClientEvent('jobspanel:syncBossPoints', -1, points)
+    cb({ success = true, bossPoints = points })
+end)
+
 MySQL.ready(function()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS jobspanel_logs (
@@ -390,6 +460,17 @@ MySQL.ready(function()
             action VARCHAR(50) NOT NULL,
             description TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ]])
+    MySQL.query.await([[
+        CREATE TABLE IF NOT EXISTS jobspanel_boss_points (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            job_name VARCHAR(50) NOT NULL,
+            x FLOAT NOT NULL,
+            y FLOAT NOT NULL,
+            z FLOAT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_boss_job (job_name)
         )
     ]])
 end)

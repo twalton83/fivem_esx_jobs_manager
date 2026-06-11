@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router';
-import { Briefcase, FileText, Users, Activity, Settings, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { Briefcase, FileText, Users, Activity, Settings, PanelLeftClose, PanelLeft, MapPin } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useState } from 'react';
 import { cn } from './ui/utils';
@@ -12,6 +12,7 @@ export const Layout = () => {
   const navItems = [
     { path: '/', label: 'Jobs', icon: Briefcase },
     { path: '/templates', label: 'Templates', icon: FileText },
+    { path: '/boss-menu', label: 'Boss Menu', icon: MapPin },
     { path: '/users', label: 'Players', icon: Users },
     { path: '/logs', label: 'Activity', icon: Activity },
     { path: '/settings', label: 'Settings', icon: Settings },

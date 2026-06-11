@@ -44,6 +44,14 @@ export interface ActivityLog {
   timestamp: string;
 }
 
+export interface BossPoint {
+  id: number;
+  jobName: string;
+  x: number;
+  y: number;
+  z: number;
+}
+
 export interface AppSettings {
   primaryColor: string;
   secondaryColor: string;
@@ -58,6 +66,7 @@ interface AppContextType {
   templates: JobTemplate[];
   users: User[];
   logs: ActivityLog[];
+  bossPoints: BossPoint[];
   settings: AppSettings;
   refreshing: boolean;
   refreshData: () => Promise<void>;
@@ -70,6 +79,8 @@ interface AppContextType {
   updateUserJob: (userId: string, jobId: string | null, rankLevel: number | null) => void;
   updateSettings: (settings: Partial<AppSettings>) => void;
   addLog: (action: string, description: string) => void;
+  placeBossPoint: (jobName: string, jobLabel: string) => void;
+  deleteBossPoint: (id: number) => Promise<boolean>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -145,6 +156,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   });
   const [users, setUsers] = useState<User[]>(isEnvBrowser ? devUsers : []);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
+  const [bossPoints, setBossPoints] = useState<BossPoint[]>(isEnvBrowser ? [
+    { id: 1, jobName: 'police', x: 440.5, y: -974.3, z: 30.7 },
+  ] : []);
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('fivem-settings');
     return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
@@ -155,10 +169,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     if (isEnvBrowser) return;
     setRefreshing(true);
     try {
-      const data = await fetchNui<{ jobs: Job[]; players: User[]; logs: ActivityLog[] }>('refreshData');
+      const data = await fetchNui<{ jobs: Job[]; players: User[]; logs: ActivityLog[]; bossPoints: BossPoint[] }>('refreshData');
       if (data.jobs) setJobs(data.jobs);
       if (data.players) setUsers(data.players);
       if (data.logs) setLogs(data.logs);
+      if (data.bossPoints) setBossPoints(data.bossPoints);
       toast.success('Data refreshed from database');
     } catch {
       toast.error('Failed to refresh data');
@@ -168,10 +183,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    return onNuiEvent<{ jobs: Job[]; players: User[]; logs: ActivityLog[] }>('loadData', (data) => {
+    return onNuiEvent<{ jobs: Job[]; players: User[]; logs: ActivityLog[]; bossPoints?: BossPoint[] }>('loadData', (data) => {
       if (data.jobs) setJobs(data.jobs);
       if (data.players) setUsers(data.players);
       if (data.logs) setLogs(data.logs);
+      if (data.bossPoints) setBossPoints(data.bossPoints);
     });
   }, []);
 
@@ -314,8 +330,34 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     addLog('UPDATE_SETTINGS', 'Updated application settings');
   };
 
+  const placeBossPoint = (jobName: string, jobLabel: string) => {
+    if (!isEnvBrowser) {
+      fetchNui('startBossPointPlacement', { jobName, jobLabel });
+    } else {
+      const mockPoint: BossPoint = { id: Date.now(), jobName, x: Math.random() * 1000, y: Math.random() * 1000, z: 30 };
+      setBossPoints((prev) => [...prev, mockPoint]);
+      toast.success(`Placed boss point for ${jobLabel} (dev mode)`);
+    }
+  };
+
+  const deleteBossPoint = async (id: number): Promise<boolean> => {
+    if (!isEnvBrowser) {
+      const result = await fetchNui<{ success: boolean; bossPoints?: BossPoint[]; error?: string }>('deleteBossPoint', { id });
+      if (result.success && result.bossPoints) {
+        setBossPoints(result.bossPoints);
+        toast.success('Boss point deleted');
+        return true;
+      }
+      toast.error(result.error || 'Failed to delete boss point');
+      return false;
+    }
+    setBossPoints((prev) => prev.filter((p) => p.id !== id));
+    addLog('DELETE_BOSS_POINT', `Deleted boss point #${id}`);
+    return true;
+  };
+
   return (
-    <AppContext.Provider value={{ jobs, templates, users, logs, settings, refreshing, refreshData, addJob, updateJob, deleteJob, addTemplate, updateTemplate, deleteTemplate, updateUserJob, updateSettings, addLog }}>
+    <AppContext.Provider value={{ jobs, templates, users, logs, bossPoints, settings, refreshing, refreshData, addJob, updateJob, deleteJob, addTemplate, updateTemplate, deleteTemplate, updateUserJob, updateSettings, addLog, placeBossPoint, deleteBossPoint }}>
       {children}
     </AppContext.Provider>
   );
